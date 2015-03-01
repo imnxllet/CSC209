@@ -11,11 +11,15 @@ extern struct block *allocated_list;
 extern struct block *freelist;
 
 /* Prints each element of the list using the format string given below:*/
-void print_list(struct block *list) {
+void print_list(struct block *list) {  
+  if (list == NULL){
+        printf("    [addr: %p, size: %d]\n", NULL, 0);
+    }
 
-        //printf("    [addr: %p, size: %d]\n", , );
-
-    printf("\n");
+    while(list != NULL){
+        printf("    [addr: %p, size: %d]\n", list->addr, list->size);
+        list = list->next;    
+    }
 }
 
 void print_allocated() {
