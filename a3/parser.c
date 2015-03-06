@@ -157,11 +157,7 @@ command* construct_command(char** tokens) {
 		cmd->scmd->err = NULL;
 		cmd->scmd->tokens = NULL;
 		
-		if (is_builtin(tokens[0]))  {
-			cmd->scmd->builtin = 1;
-		} else {
-			cmd->scmd->builtin = 0;
-		}
+		cmd->scmd->builtin = is_builtin(tokens[0]);
 		
 		int err = extract_redirections(tokens, cmd->scmd);
 		if (err == -1) {
