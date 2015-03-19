@@ -102,9 +102,18 @@ int execute_cd(char** words) {
 	 * - If so, return an EXIT_FAILURE status to indicate something is 
 	 *   wrong.
 	 */
+	 int message;
 
-
-
+    if (words == NULL){
+    	fprintf(stderr, "No command given\n"); 
+    	return EXIT_FAILURE;
+    }else if(words[0] == NULL|| words[1] == NULL){
+    	fprintf(stderr, "Missing argument\n"); 
+    	return EXIT_FAILURE;
+    }else if(strcmp(words[0], "cd") != 0){
+    	fprintf(stderr, "Not a cd command\n"); 
+    	return EXIT_FAILURE;
+    }else{
 	/**
 	 * TODO: 
 	 * The safest way would be to first determine if the path is relative 
@@ -117,6 +126,12 @@ int execute_cd(char** words) {
 	 * Hints: see chdir and getcwd man pages.
 	 * Return the success/error code obtained when changing the directory.
 	 */
+        message = chdir(words[1]);
+        if (message == -1){
+        	perror("");
+        }
+	 
+	} 	
 	 
 }
 
@@ -146,7 +161,11 @@ int execute_command(char **tokens) {
 	 *   would suffice.
 	 * Function returns only in case of a failure (EXIT_FAILURE).
 	 */
-
+    int ret;
+    if((ret = execvp(tokens[0], tokens)) == -1){
+    	perror("Failed");
+    	return ret;
+    }
 
 }
 
@@ -169,6 +188,36 @@ int execute_nonbuiltin(simple_command *s) {
 	 * This function returns only if the execution of the program fails.
 	 */
 	
+	if (s->in != NULL){
+		int filedes = open(s->in, O_RDONLY);
+		dup2(filedes, fileno(stdin));
+		close(filedes);
+		execute_command(s->tokens);
+
+	}else if(s->out != NULL && s->err != NULL){
+		int filedes = open(s->out, O_WRONLY | O_CREAT, S_IRWXU);
+		dup2(filedes, fileno(stdout));
+		close(filedes);
+		int file = open(s->err, O_RDONLY);
+		dup2(file, fileno(stderr));
+		close(file);
+		execute_command(s->tokens);
+
+	}else if(s->out != NULL){
+		int filedes = open(s->out, O_WRONLY | O_CREAT, S_IRWXU);
+		dup2(filedes, fileno(stdout));
+		close(filedes);
+		execute_command(s->tokens);
+
+	}else if(s->err != NULL){
+		int filedes = open(s->err, O_RDONLY);
+		dup2(filedes, fileno(stderr));
+		close(filedes);
+		execute_command(s->tokens);
+
+	}else{
+		execute_command(s->tokens);
+	}
 
 }
 
@@ -189,6 +238,22 @@ int execute_simple_command(simple_command *cmd) {
 	 * - The parent should wait for the child.
 	 *   (see wait man pages).
 	 */
+    int r, status;
+	if(cmd->builtin != 0){
+		if(is_builtin(cmd->tokens[0]) == BUILTIN_CD){
+		 	execute_cd(cmd->tokens);
+
+		 }else if(is_builtin(cmd->tokens[0]) == BUILTIN_EXIT){
+		 	return -1;
+		 }
+
+	}else{
+	 	if((r = fork()) == 0){//child
+	 		execute_nonbuiltin(cmd)	;
+	 	}
+	 	
+	 	wait(&status);
+	}
 	
 }
 
@@ -197,7 +262,7 @@ int execute_simple_command(simple_command *cmd) {
  * Executes a complex command.  A complex command is two commands chained 
  * together with a pipe operator.
  */
-int execute_complex_command(command *c) {
+int execute_complex_command(command *c){
 	
 	/**
 	 * TODO:
@@ -207,23 +272,74 @@ int execute_complex_command(command *c) {
 	 * Execute nonbuiltin commands only. If it's exit or cd, you should not 
 	 * execute these in a piped context, so simply ignore builtin commands. 
 	 */
-	
+	if(c->scmd != NULL){
+        execute_nonbuiltin(c->scmd);
+	}else{
+ 
 
-
-	/** 
-	 * Optional: if you wish to handle more than just the 
-	 * pipe operator '|' (the '&&', ';' etc. operators), then 
-	 * you can add more options here. 
-	 */
-
-	if (!strcmp(c->oper, "|")) {
-		
 		/**
 		 * TODO: Create a pipe "pfd" that generates a pair of file 
 		 * descriptors, to be used for communication between the 
 		 * parent and the child. Make sure to check any errors in 
 		 * creating the pipe.
 		 */
+	    int pfd[2], result, new, r, status, sta;
+		if (strcmp(c->oper, "|") == 0){
+	        if ((result = pipe(pfd)) == -1){
+	        	perror("pipe");
+	        }	
+	    if ((r = fork()) == -1){
+	        perror("fork");
+	        exit(1);
+	    }
+	    else if (r>1){  //parent process
+	    	printf("1\n");
+	    	//close(pfd[0]);
+	    	//close(pfd[1]);
+	    	printf("2\n");
+	    	//wait(&status);
+	    	printf("3\n");
+	    	if ((new = fork()) > 0){
+	    		printf("8\n");
+	    		//close(pfd[0]);
+	    		//close(pfd[1]);
+	    		printf("9\n");
+	    		//wait(&sta);
+	    		printf("10\n");
+	        
+	        }else if(new == 0){
+	        	printf("11\n");
+	        	close(pfd[1]);  // 0:read 1:write
+	            //close(fileno(stdin));
+	            printf("12\n");
+	            dup2(pfd[0], fileno(stdin));
+	            printf("13\n");
+	            close(pfd[0]);
+	            execute_complex_command(c->cmd2);
+	            printf("14\n");
+	            exit(0); 
+
+	        }else{
+	        	perror("fork");
+	        }    
+	    }
+	    else if(r == 0){ //child process
+	    	printf("4\n");
+	    	close(pfd[0]);
+	    	close(fileno(stdout));
+	    	perror("");
+	    	printf("5\n");
+	        dup2(pfd[1],fileno(stdout));
+	        printf("6\n");
+	        close(pfd[1]);
+	        execute_complex_command(c->cmd1);
+	        printf("7\n");
+	        exit(0);
+
+	    }else{
+	    	perror("fork");
+	    }
+	}    
 
 			
 		/**
@@ -248,6 +364,5 @@ int execute_complex_command(command *c) {
 		 *     - wait for both children to finish.
 		 */
 		
-	}
 	return 0;
-}
+}}
