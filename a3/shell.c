@@ -131,7 +131,9 @@ int execute_cd(char** words) {
         	perror("");
         }
 	 
-	} 	
+    }
+    return 0;
+	
 	 
 }
 
@@ -166,6 +168,8 @@ int execute_command(char **tokens) {
     	perror("Failed");
     	return ret;
     }
+    
+    return 0;
 
 }
 
@@ -215,9 +219,12 @@ int execute_nonbuiltin(simple_command *s) {
 		close(filedes);
 		execute_command(s->tokens);
 
-	}else{
+	}else{ 
+	      printf("hi3:%s\n", s->tokens[0]);
 		execute_command(s->tokens);
 	}
+	
+	return 0;
 
 }
 
@@ -238,7 +245,6 @@ int execute_simple_command(simple_command *cmd) {
 	 * - The parent should wait for the child.
 	 *   (see wait man pages).
 	 */
-    int r, status;
 	if(cmd->builtin != 0){
 		if(is_builtin(cmd->tokens[0]) == BUILTIN_CD){
 		 	execute_cd(cmd->tokens);
@@ -248,12 +254,19 @@ int execute_simple_command(simple_command *cmd) {
 		 }
 
 	}else{
-	 	if((r = fork()) == 0){//child
-	 		execute_nonbuiltin(cmd)	;
-	 	}
-	 	
-	 	wait(&status);
+             int r,status; 
+	     if ((r = fork()) == -1){ // fork failed 
+                 perror("fork"); 
+	         exit(-1); 
+	       
+	    } 
+	     else if (r > 1){ // parent process 
+                 wait(&status); 
+	       
+	    } else if (r == 0){ // child process 
+                 exit(execute_nonbuiltin(cmd)); }
 	}
+	return 0;
 	
 }
 
@@ -272,10 +285,10 @@ int execute_complex_command(command *c){
 	 * Execute nonbuiltin commands only. If it's exit or cd, you should not 
 	 * execute these in a piped context, so simply ignore builtin commands. 
 	 */
+	int pfd[2], result, child1, child2, status, status2, r;
 	if(c->scmd != NULL){
-        execute_nonbuiltin(c->scmd);
+	    execute_simple_command(c->scmd);
 	}else{
- 
 
 		/**
 		 * TODO: Create a pipe "pfd" that generates a pair of file 
@@ -283,64 +296,45 @@ int execute_complex_command(command *c){
 		 * parent and the child. Make sure to check any errors in 
 		 * creating the pipe.
 		 */
-	    int pfd[2], result, new, r, status, sta;
-		if (strcmp(c->oper, "|") == 0){
+	   
+	    if (!strcmp(c->oper, "|")){
 	        if ((result = pipe(pfd)) == -1){
-	        	perror("pipe");
+	            perror("pipe");
 	        }	
-	    if ((r = fork()) == -1){
-	        perror("fork");
-	        exit(1);
-	    }
-	    else if (r>1){  //parent process
-	    	printf("1\n");
-	    	//close(pfd[0]);
-	    	//close(pfd[1]);
-	    	printf("2\n");
-	    	//wait(&status);
-	    	printf("3\n");
-	    	if ((new = fork()) > 0){
-	    		printf("8\n");
-	    		//close(pfd[0]);
-	    		//close(pfd[1]);
-	    		printf("9\n");
-	    		//wait(&sta);
-	    		printf("10\n");
-	        
-	        }else if(new == 0){
-	        	printf("11\n");
-	        	close(pfd[1]);  // 0:read 1:write
-	            //close(fileno(stdin));
-	            printf("12\n");
-	            dup2(pfd[0], fileno(stdin));
-	            printf("13\n");
-	            close(pfd[0]);
-	            execute_complex_command(c->cmd2);
-	            printf("14\n");
-	            exit(0); 
 
-	        }else{
-	        	perror("fork");
-	        }    
-	    }
-	    else if(r == 0){ //child process
-	    	printf("4\n");
-	    	close(pfd[0]);
-	    	close(fileno(stdout));
-	    	perror("");
-	    	printf("5\n");
-	        dup2(pfd[1],fileno(stdout));
-	        printf("6\n");
-	        close(pfd[1]);
-	        execute_complex_command(c->cmd1);
-	        printf("7\n");
-	        exit(0);
+            if ((child1 = fork()) == 0){//child1
 
+		close(pfd[0]);
+	        dup2(pfd[1], fileno(stdout));
+		close(pfd[1]);
+		execute_complex_command(c->cmd1);
+		exit(0);
+            }else if(child1 > 0){//parent1
+
+                if ((child2 = fork()) == 0){//child2
+		     close(pfd[1]);
+		    dup2(pfd[0], fileno(stdin));
+		     close(pfd[0]);
+		    execute_complex_command(c->cmd2);
+		    exit(0);  
+		}else if (child2 > 0){//parent2
+		    close(pfd[0]);
+		    close(pfd[1]);
+		    wait(&status);
+		    wait(&status2);
+		}else{
+		  perror("fork");
+		  exit(1);
+		}  
 	    }else{
-	    	perror("fork");
-	    }
-	}    
+	      perror("fork");
+	      exit(1);
+	    }  
+	      
+		  
+	    
 
+	    
 			
 		/**
 		 * TODO: Fork a new process.
@@ -363,6 +357,6 @@ int execute_complex_command(command *c){
 		 *     - close both ends of the pipe. 
 		 *     - wait for both children to finish.
 		 */
-		
-	return 0;
+	}	
+    return 0;
 }}
