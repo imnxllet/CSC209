@@ -132,7 +132,7 @@ int execute_cd(char** words) {
         }
 	 
     }
-    exit(1);
+    return 0;
 	
 	 
 }
@@ -165,7 +165,7 @@ int execute_command(char **tokens) {
 	 */
     int ret;
     if((ret = execvp(tokens[0], tokens)) == -1){
-    	perror("Failed");
+    	perror(tokens[0]);
     	return ret;
     }
     
@@ -251,7 +251,7 @@ int execute_simple_command(simple_command *cmd) {
 	if(cmd->builtin != 0){
 	    if(is_builtin(cmd->tokens[0]) == BUILTIN_CD){
 		 execute_cd(cmd->tokens);
-		 exit(1);
+		 
 
 	    }else if(is_builtin(cmd->tokens[0]) == BUILTIN_EXIT){
 		 return -1;
@@ -320,6 +320,6 @@ int execute_complex_command(command *c){
 	  wait(0);
 	  wait(0);
 	  return 0;
-    }	  
-	  
+    }
+    return 0;	  
 }
