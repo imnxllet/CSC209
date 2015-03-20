@@ -132,7 +132,7 @@ int execute_cd(char** words) {
         }
 	 
     }
-    return 0;
+    exit(1);
 	
 	 
 }
@@ -169,7 +169,7 @@ int execute_command(char **tokens) {
     	return ret;
     }
     
-    return 0;
+    exit(1);
 
 }
 
@@ -192,39 +192,42 @@ int execute_nonbuiltin(simple_command *s) {
 	 * This function returns only if the execution of the program fails.
 	 */
 	
-	if (s->in != NULL){
-		int filedes = open(s->in, O_RDONLY);
-		dup2(filedes, fileno(stdin));
-		close(filedes);
-		execute_command(s->tokens);
+    if (s->in != NULL){
+	int filedes = open(s->in, O_RDONLY);
+	dup2(filedes, fileno(stdin));
+	close(filedes);
+	execute_command(s->tokens);
+	exit(1);
 
-	}else if(s->out != NULL && s->err != NULL){
-		int filedes = open(s->out, O_WRONLY | O_CREAT, S_IRWXU);
-		dup2(filedes, fileno(stdout));
-		close(filedes);
-		int file = open(s->err, O_RDONLY);
-		dup2(file, fileno(stderr));
-		close(file);
-		execute_command(s->tokens);
+    }else if(s->out != NULL && s->err != NULL){
+	int filedes = open(s->out, O_WRONLY | O_CREAT, S_IRWXU);
+	dup2(filedes, fileno(stdout));
+	close(filedes);
+	int file = open(s->err, O_RDONLY);
+	dup2(file, fileno(stderr));
+	close(file);
+	execute_command(s->tokens);
+	exit(1);
 
-	}else if(s->out != NULL){
-		int filedes = open(s->out, O_WRONLY | O_CREAT, S_IRWXU);
-		dup2(filedes, fileno(stdout));
-		close(filedes);
-		execute_command(s->tokens);
+    }else if(s->out != NULL){
+	int filedes = open(s->out, O_WRONLY | O_CREAT, S_IRWXU);
+	dup2(filedes, fileno(stdout));
+	close(filedes);
+	execute_command(s->tokens);
+	exit(1);
 
-	}else if(s->err != NULL){
-		int filedes = open(s->err, O_RDONLY);
-		dup2(filedes, fileno(stderr));
-		close(filedes);
-		execute_command(s->tokens);
+    }else if(s->err != NULL){
+	int filedes = open(s->err, O_RDONLY);
+	dup2(filedes, fileno(stderr));
+	close(filedes);
+	execute_command(s->tokens);
+	exit(1);
 
-	}else{ 
-	      printf("hi3:%s\n", s->tokens[0]);
-		execute_command(s->tokens);
-	}
+    }else{ 
+	execute_command(s->tokens);
+	exit(1);
+    }
 	
-	return 0;
 
 }
 
@@ -246,12 +249,13 @@ int execute_simple_command(simple_command *cmd) {
 	 *   (see wait man pages).
 	 */
 	if(cmd->builtin != 0){
-		if(is_builtin(cmd->tokens[0]) == BUILTIN_CD){
-		 	execute_cd(cmd->tokens);
+	    if(is_builtin(cmd->tokens[0]) == BUILTIN_CD){
+		 execute_cd(cmd->tokens);
+		 exit(1);
 
-		 }else if(is_builtin(cmd->tokens[0]) == BUILTIN_EXIT){
-		 	return -1;
-		 }
+	    }else if(is_builtin(cmd->tokens[0]) == BUILTIN_EXIT){
+		 return -1;
+	    }    
 
 	}else{
              int r,status; 
@@ -264,7 +268,10 @@ int execute_simple_command(simple_command *cmd) {
                  wait(&status); 
 	       
 	    } else if (r == 0){ // child process 
-                 exit(execute_nonbuiltin(cmd)); }
+                 execute_nonbuiltin(cmd);
+		 exit(1);
+	      
+	    }
 	}
 	return 0;
 	
@@ -276,87 +283,43 @@ int execute_simple_command(simple_command *cmd) {
  * together with a pipe operator.
  */
 int execute_complex_command(command *c){
-	
-	/**
-	 * TODO:
-	 * Check if this is a simple command, using the scmd field.
-	 * Remember that this will be called recursively, so when you encounter
-	 * a simple command you should act accordingly.
-	 * Execute nonbuiltin commands only. If it's exit or cd, you should not 
-	 * execute these in a piped context, so simply ignore builtin commands. 
-	 */
-	int pfd[2], result, child1, child2, status, status2, r;
-	if(c->scmd != NULL){
-	    execute_simple_command(c->scmd);
-	}else{
+    if (c->scmd){
+        execute_simple_command(c->scmd);
+      
+    }else{
+	  int pfd[2];
+	  if(pipe(pfd) == -1) {
+	    perror("Pipe failed");
+	    exit(1);
+	  }
 
-		/**
-		 * TODO: Create a pipe "pfd" that generates a pair of file 
-		 * descriptors, to be used for communication between the 
-		 * parent and the child. Make sure to check any errors in 
-		 * creating the pipe.
-		 */
-	   
-	    if (!strcmp(c->oper, "|")){
-	        if ((result = pipe(pfd)) == -1){
-	            perror("pipe");
-	        }	
+	  if(fork() == 0)        //first fork
+	  {
+	      close(1);          //closing stdout
+	      dup(pfd[1]);     //replacing stdout with pipe write 
+	      close(pfd[0]);   //closing pipe read
+	      close(pfd[1]);
 
-            if ((child1 = fork()) == 0){//child1
+	    execute_complex_command(c->cmd1); 
+	    exit(1);
+	  }
 
-		close(pfd[0]);
-	        dup2(pfd[1], fileno(stdout));
-		close(pfd[1]);
-		execute_complex_command(c->cmd1);
-		exit(0);
-            }else if(child1 > 0){//parent1
+	  if(fork() == 0)        //creating 2nd child
+	  {
+	      close(0);          //closing stdin
+	      dup(pfd[0]);     //replacing stdin with pipe read
+	      close(pfd[1]);   //closing pipe write
+	      close(pfd[0]);
 
-                if ((child2 = fork()) == 0){//child2
-		     close(pfd[1]);
-		    dup2(pfd[0], fileno(stdin));
-		     close(pfd[0]);
-		    execute_complex_command(c->cmd2);
-		    exit(0);  
-		}else if (child2 > 0){//parent2
-		    close(pfd[0]);
-		    close(pfd[1]);
-		    wait(&status);
-		    wait(&status2);
-		}else{
-		  perror("fork");
-		  exit(1);
-		}  
-	    }else{
-	      perror("fork");
+	      execute_complex_command(c->cmd2);
 	      exit(1);
-	    }  
-	      
-		  
-	    
+	  }
 
-	    
-			
-		/**
-		 * TODO: Fork a new process.
-		 * In the child:
-		 *  - close one end of the pipe pfd and close the stdout 
-		 * file descriptor.
-		 *  - connect the stdout to the other end of the pipe (the 
-		 * one you didn't close).
-		 *  - execute complex command cmd1 recursively. 
-		 * In the parent: 
-		 *  - fork a new process to execute cmd2 recursively.
-		 *  - In child 2:
-		 *     - close one end of the pipe pfd (the other one than 
-		 *       the first child), and close the standard input file 
-		 *       descriptor.
-		 *     - connect the stdin to the other end of the pipe (the 
-		 *       one you didn't close).
-		 *     - execute complex command cmd2 recursively. 
-		 *  - In the parent:
-		 *     - close both ends of the pipe. 
-		 *     - wait for both children to finish.
-		 */
-	}	
-    return 0;
-}}
+	  close(pfd[0]);
+	  close(pfd[1]);
+	  wait(0);
+	  wait(0);
+	  return 0;
+    }	  
+	  
+}
