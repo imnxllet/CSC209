@@ -53,6 +53,37 @@ int main(void) {
     strip(password, MAXPASSWD);
 
     /*Your code here*/
+    int fd[2],status,r,result;
+    if ((result = pipe(fd)) == -1){
+        perror("pipe");
+        exit(1);
+    }
+    if ((r = fork()) == -1){
+        perror("fork");
+        exit(1);
+    }
+    else if (r>1){  //parent process
+        close(fd[0]);  // 0:read 1:write
+        write(fd[1],userid,MAXPASSWD);   
+        write(fd[1],password,MAXPASSWD);
+        close(fd[1]);
+        if (wait(&status) != -1){
+            if (WIFEXITED(status)){
+                if(WEXITSTATUS(status) == 0)
+                    printf("Password verified\n");
+                else if(WEXITSTATUS(status) == 2) 
+                    printf("Invalid password\n");
+                else if (WEXITSTATUS(status) == 3)
+                    printf("No such user\n");
+            }
+        }
+    }
+    else{ //child process
+        dup2(fd[0],fileno(stdin));
+        close(fd[1]);
+        close(fd[0]);
+        execlp("./validate","validate", (char *) 0);
+    }
     
     return 0;
 }
