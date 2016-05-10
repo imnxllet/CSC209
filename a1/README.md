@@ -1,3 +1,5 @@
+http://www.cdf.toronto.edu/~csc209h/winter/assignments/a1/a1.html
+
 Assignment 1: Memory and Files
 Due: Electronically, by 10:00 PM on Jan 29
 
